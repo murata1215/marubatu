@@ -2,6 +2,7 @@
 
 import os
 import random
+import re
 from typing import Optional
 from .board import Board
 from .judge import Judge
@@ -163,10 +164,12 @@ Reply with ONLY a single number (the cell index) for your best move."""
             )
             
             move_str = response.choices[0].message.content.strip()
-            move = int(move_str)
             
-            if move in empty_cells:
-                return move
+            match = re.search(r'\d+', move_str)
+            if match:
+                move = int(match.group())
+                if move in empty_cells:
+                    return move
             
         except Exception:
             pass

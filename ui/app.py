@@ -1,10 +1,12 @@
 """Tkinter GUI application for Tic-Tac-Toe."""
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 import random
 import json
 import os
+import threading
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -35,8 +37,10 @@ class TicTacToeApp:
         self.session_start_time = datetime.now()
         self.session_log_file = self._create_session_log_file()
         self.game_history: list[dict] = []
+        self.game_id = 0
         
         self._setup_ui()
+        self._disable_board()
         self._update_status("「開始」ボタンを押してゲームを始めてください")
     
     def _create_session_log_file(self) -> str:
@@ -116,11 +120,17 @@ class TicTacToeApp:
         """Update the status label."""
         self.status_label.config(text=message)
     
+    def _disable_board(self) -> None:
+        """Disable all board buttons."""
+        for btn in self.buttons:
+            btn.config(state=tk.DISABLED)
+    
     def _start_game(self) -> None:
         """Start a new game."""
         self.board.reset()
         self.moves = []
         self.game_start_time = datetime.now()
+        self.game_id += 1
         
         for btn in self.buttons:
             btn.config(text="", state=tk.NORMAL, bg="SystemButtonFace")
@@ -195,7 +205,15 @@ class TicTacToeApp:
         if not self.game_active:
             return
         
-        move = self.cpu.get_move(self.board)
+        try:
+            move = self.cpu.get_move(self.board)
+        except Exception as e:
+            self._update_status(f"CPUエラー: {e}\nリセットしてください")
+            self.game_active = False
+            self._disable_board()
+            self.start_button.config(state=tk.NORMAL)
+            return
+        
         self.board.set_cell(move, self.cpu_mark)
         self.buttons[move].config(text=self.cpu_mark)
         self.moves.append({
@@ -250,11 +268,18 @@ class TicTacToeApp:
         
         self._save_game_log(result)
         
-        reflection = CPU.get_game_reflection(self.moves, result)
-        if reflection:
-            self._update_status(f"{message}\n\n{reflection}")
-        
         self.start_button.config(state=tk.NORMAL)
+        
+        current_game_id = self.game_id
+        moves_copy = self.moves.copy()
+        
+        def fetch_reflection():
+            reflection = CPU.get_game_reflection(moves_copy, result)
+            if reflection and self.game_id == current_game_id:
+                self.root.after(0, lambda: self._update_status(f"{message}\n\n{reflection}"))
+        
+        thread = threading.Thread(target=fetch_reflection, daemon=True)
+        thread.start()
     
     def _save_game_log(self, winner: str) -> None:
         """Save game log to file."""
@@ -277,6 +302,24 @@ class TicTacToeApp:
         self.game_history.append(game_record)
         self._update_history_display()
     
+    def _get_japanese_result(self, winner: str) -> str:
+        """Convert winner string to Japanese display text."""
+        if winner == "Draw":
+            return "引き分け"
+        elif winner == self.HUMAN:
+            return "あなたの勝ち"
+        elif winner == self.CPU_PLAYER:
+            return "CPUの勝ち"
+        return winner
+    
+    def _get_japanese_first_player(self, first_player: str) -> str:
+        """Convert first player string to Japanese display text."""
+        if first_player == self.HUMAN:
+            return "あなた"
+        elif first_player == self.CPU_PLAYER:
+            return "CPU"
+        return first_player
+    
     def _update_history_display(self) -> None:
         """Update the history text display."""
         self.history_text.config(state=tk.NORMAL)
@@ -284,8 +327,8 @@ class TicTacToeApp:
         
         for i, game in enumerate(reversed(self.game_history[-10:]), 1):
             game_num = len(self.game_history) - i + 1
-            first = "先手: " + game["first_player"]
-            result = "結果: " + game["winner"]
+            first = "先手: " + self._get_japanese_first_player(game["first_player"])
+            result = "結果: " + self._get_japanese_result(game["winner"])
             moves_count = f"手数: {len(game['moves'])}"
             
             self.history_text.insert(tk.END, f"--- ゲーム {game_num} ---\n")
