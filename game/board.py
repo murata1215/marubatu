@@ -1,7 +1,5 @@
 """Board class for managing the Tic-Tac-Toe game state."""
 
-from typing import Optional
-
 
 class Board:
     """Manages the 3x3 Tic-Tac-Toe board state."""
