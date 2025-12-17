@@ -1,0 +1,5 @@
+# Optional dependencies for OpenAI integration
+# These are only needed if you want to use AI-powered features
+
+python-dotenv>=1.0.0
+openai>=1.0.0
